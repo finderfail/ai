@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+index/embeddings.npy
+index/chunks.json
+.DS_Store
+.env

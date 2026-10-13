@@ -1,0 +1,16 @@
+# HTML/CSS の例: フローティングアクションボタン
+
+右下に固定された丸いボタン。
+
+```html
+<button class="fab" aria-label="New message">+</button>
+```
+
+```css
+.fab {
+  position: fixed; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; border-radius: 50%; border: 0;
+  background: #4f46e5; color: #fff; font-size: 28px; cursor: pointer;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .25);
+}
+```

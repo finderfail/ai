@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title data-i18n="meta.title">Kriloud AI</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Kriloud AI" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="stylesheet" href="/style.css?v=27" />
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <a class="logo" href="/">
+          <span class="orb orb-sm" aria-hidden="true"></span>
+          <span class="logo-name">Universal Kriloud AI</span>
+        </a>
+        <button class="icon-btn sidebar-close" id="sidebarClose" type="button" aria-label="Закрыть меню" data-i18n-aria="sidebar.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <button class="new-chat" id="newChat" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span data-i18n="chat.new">Новый чат</span>
+      </button>
+
+      <nav class="history" id="historyNav" aria-label="История" data-i18n-aria="history.label">
+        <p class="history-label" id="historyLabel" data-i18n="history.label" hidden>История</p>
+        <ul class="history-list" id="historyList"></ul>
+        <p class="history-empty" id="historyEmpty" data-i18n="history.empty">Здесь появятся ваши чаты</p>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="profile" id="profile" hidden>
+          <div class="profile-row">
+            <button class="profile-open" id="profileOpen" type="button" aria-haspopup="dialog">
+              <span class="avatar" id="profileAvatar" aria-hidden="true">K</span>
+              <span class="profile-body">
+                <span class="profile-email" id="profileEmail">—</span>
+                <span class="plan-badge" id="planBadge">Free</span>
+              </span>
+            </button>
+            <button class="icon-btn" id="logoutBtn" type="button" aria-label="Выйти" title="Выйти" data-i18n-aria="account.logout" data-i18n-title="account.logout">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg>
+            </button>
+          </div>
+          <div class="quota">
+            <div class="quota-bar"><span class="quota-fill" id="quotaFill"></span></div>
+            <span class="quota-text" id="quotaText">—</span>
+          </div>
+        </div>
+        <a class="login-btn" id="loginBtn" href="/login" data-i18n="account.login">Войти</a>
+        <div class="status" id="status" data-state="pending">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-text" id="statusText" data-i18n="status.checking">Проверяем модель…</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="sidebarOpen" type="button" aria-label="Открыть меню" data-i18n-aria="sidebar.open">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <span class="topbar-title" id="topbarTitle">Kriloud AI</span>
+        <div class="topbar-actions">
+          <div class="model-switch" id="modelSwitch" role="radiogroup" aria-label="Модель" data-i18n-aria="model.label" hidden></div>
+          <button class="pill" id="plansBtn" type="button" data-i18n="topbar.plans">Тарифы</button>
+          <a class="pill pill-dark" id="topLoginBtn" href="/login" data-i18n="account.login">Войти</a>
+        </div>
+      </header>
+
+      <div class="chat" id="chat">
+        <div class="chat-inner">
+          <section class="hero" id="hero">
+            <span class="orb orb-lg" aria-hidden="true"></span>
+            <h1 class="hero-title" data-i18n="hero.title">Чем могу помочь?</h1>
+            <p class="hero-sub" data-i18n="hero.sub">Отвечаю по своей базе знаний: код, bash и git, математика, платёжные системы и банки</p>
+          </section>
+          <div class="thread" id="thread"></div>
+        </div>
+      </div>
+
+      <button class="scroll-btn" id="scrollDown" type="button" hidden aria-label="Вниз" data-i18n-aria="chat.scrollDown">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      </button>
+
+      <div class="dock" id="dock">
+        <form class="composer" id="form">
+          <textarea
+            id="input"
+            class="composer-input"
+            placeholder="Спросите Kriloud"
+            data-i18n-placeholder="composer.placeholder"
+            rows="1"
+            autocomplete="off"
+            spellcheck="false"
+          ></textarea>
+          <div class="composer-bar">
+            <button type="button" class="stop-btn" id="stop" hidden aria-label="Остановить" data-i18n-aria="composer.stop">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+            </button>
+            <button type="submit" class="send-btn" id="send" aria-label="Отправить" data-i18n-aria="composer.send" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+            </button>
+          </div>
+        </form>
+        <div class="suggests" id="suggests">
+          <button class="suggest" type="button" data-i18n="suggest.1.label" data-i18n-text="suggest.1.text" data-text="Напиши HTTP-сервер на Node.js без фреймворков">HTTP-сервер на Node.js</button>
+          <button class="suggest" type="button" data-i18n="suggest.2.label" data-i18n-text="suggest.2.text" data-text="Как скомпилировать программу на C в macOS?">Компиляция C в macOS</button>
+          <button class="suggest" type="button" data-i18n="suggest.3.label" data-i18n-text="suggest.3.text" data-text="Как отменить последний коммит в git?">Отменить коммит в git</button>
+          <button class="suggest" type="button" data-i18n="suggest.4.label" data-i18n-text="suggest.4.text" data-text="Найди производную x^2 * sin(x)">Производная x² · sin(x)</button>
+        </div>
+        <p class="dock-note" data-i18n="dock.note">Kriloud может ошибаться. Проверяйте важную информацию.</p>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal" id="menuModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <div class="modal-head">
+        <div class="modal-heading">
+          <h2 class="modal-title" id="menuTitle" data-i18n="menu.account">Аккаунт</h2>
+          <span class="modal-sub" id="menuEmail" hidden></span>
+        </div>
+        <button class="icon-btn" id="menuClose" type="button" aria-label="Закрыть" data-i18n-aria="menu.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="segmented menu-tabs" id="menuTabs" role="tablist">
+        <button class="segment active" data-tab="plans" type="button" role="tab" data-i18n="tab.plans">Тарифы</button>
+        <button class="segment" data-tab="usage" type="button" role="tab" data-i18n="tab.usage">Использование</button>
+        <button class="segment" data-tab="language" type="button" role="tab" data-i18n="tab.language">Язык</button>
+        <button class="segment" data-tab="api" type="button" role="tab" data-i18n="tab.api">API</button>
+      </div>
+
+      <section class="menu-panel" data-panel="plans">
+        <div class="plans" id="plansGrid"></div>
+        <p class="modal-note" data-i18n="plans.note">Лимит считается по токенам запроса и ответа и обнуляется каждые сутки. Сменить тариф можно через администратора.</p>
+      </section>
+
+      <section class="menu-panel" data-panel="usage" hidden>
+        <div class="usage-today">
+          <div class="usage-head">
+            <span class="usage-label" data-i18n="usage.today">Сегодня</span>
+            <span class="usage-value" id="usageToday">—</span>
+          </div>
+          <div class="quota-bar quota-bar-lg"><span class="quota-fill" id="usageFill"></span></div>
+          <span class="usage-hint" id="usageHint">—</span>
+        </div>
+        <h3 class="usage-title" data-i18n="usage.days">Последние 14 дней</h3>
+        <div class="usage-table" id="usageTable"></div>
+      </section>
+
+      <section class="menu-panel" data-panel="language" hidden>
+        <p class="lang-intro" data-i18n="language.intro">Язык интерфейса и ответов Kriloud. Если в сообщении попросить другой язык, ответ будет на нём.</p>
+        <div class="lang-list" id="langList" role="radiogroup" aria-label="Язык" data-i18n-aria="language.label"></div>
+      </section>
+
+      <section class="menu-panel" data-panel="api" hidden>
+        <p class="lang-intro" data-i18n="api.intro"></p>
+        <form class="api-create" id="apiCreate">
+          <input class="field" id="apiName" maxlength="64" autocomplete="off" data-i18n-placeholder="api.namePlaceholder" />
+          <button class="btn-primary api-create-btn" type="submit" data-i18n="api.create"></button>
+        </form>
+        <p class="form-error" id="apiError" hidden></p>
+        <div class="api-new" id="apiNew" hidden>
+          <p class="api-new-title" data-i18n="api.created"></p>
+          <div class="api-key-row">
+            <code class="api-key" id="apiNewKey"></code>
+            <button class="code-copy" id="apiCopyKey" type="button" data-i18n="action.copy"></button>
+          </div>
+        </div>
+        <div class="api-list" id="apiList"></div>
+        <h3 class="usage-title" data-i18n="api.continueTitle"></h3>
+        <div class="code api-config">
+          <div class="code-head"><span>config.yaml</span><button class="code-copy" id="apiCopyConfig" type="button" data-i18n="action.copy"></button></div>
+          <pre><code id="apiConfig"></code></pre>
+        </div>
+        <p class="modal-note" data-i18n="api.note"></p>
+      </section>
+    </div>
+  </div>
+
+  <script src="/i18n.js?v=27"></script>
+  <script src="/app.js?v=27"></script>
+</body>
+</html>

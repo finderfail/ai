@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Черновик ответа</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; min-height: 100vh;
+    background: #14151a; color: #e6e6e6;
+    font: 15px/1.5 -apple-system, "Segoe UI", sans-serif;
+  }
+  .card {
+    max-width: 640px; margin: 0 auto;
+    background: #1c1e24; border: 1px solid #2b2e37; border-radius: 12px;
+    padding: 20px;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 16px; color: #9aa0ac; text-transform: uppercase; letter-spacing: .04em; }
+  .label { font-size: 12px; color: #767c88; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .incoming, .draft {
+    white-space: pre-wrap; padding: 12px 14px; border-radius: 8px; margin-bottom: 18px;
+  }
+  .incoming { background: #23252c; border: 1px solid #2b2e37; }
+  .draft { background: #1a2b22; border: 1px solid #2c4837; }
+  .empty { color: #565b66; font-style: italic; }
+  .row { display: flex; gap: 10px; margin-top: 4px; }
+  button {
+    flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #2b2e37;
+    background: #262933; color: #e6e6e6; font-size: 14px; cursor: pointer;
+  }
+  button:hover { background: #2d3038; }
+  button.primary { background: #2f7a52; border-color: #2f7a52; }
+  button.primary:hover { background: #368a5c; }
+  .sources { margin-top: 10px; font-size: 12px; color: #565b66; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #2f7a52; color: #fff; padding: 8px 16px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Входящее</h1>
+    <div id="incoming" class="incoming empty">Ждём новое сообщение…</div>
+
+    <h1>Черновик ответа</h1>
+    <div id="draft" class="draft empty">—</div>
+    <div class="row">
+      <button class="primary" id="copyBtn">Скопировать</button>
+      <button id="regenBtn">Другой вариант</button>
+    </div>
+    <div id="sources" class="sources"></div>
+  </div>
+  <div class="toast" id="toast">Скопировано</div>
+
+<script>
+let lastIncoming = null;
+let lastDraft = null;
+
+function render(state) {
+  const incomingEl = document.getElementById("incoming");
+  const draftEl = document.getElementById("draft");
+  const sourcesEl = document.getElementById("sources");
+
+  if (state.incoming) {
+    incomingEl.textContent = state.incoming;
+    incomingEl.classList.remove("empty");
+  }
+  if (state.draft) {
+    draftEl.textContent = state.draft;
+    draftEl.classList.remove("empty");
+  }
+  sourcesEl.textContent = (state.sources && state.sources.length)
+    ? "Источники: " + state.sources.join(", ")
+    : "";
+
+  lastIncoming = state.incoming;
+  lastDraft = state.draft;
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/api/draft/latest");
+    const state = await res.json();
+    if (state.draft !== lastDraft || state.incoming !== lastIncoming) {
+      render(state);
+    }
+  } catch (e) { /* агент/сервер временно недоступны — тихо пробуем снова */ }
+}
+setInterval(poll, 1500);
+poll();
+
+function showToast() {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1200);
+}
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  if (!lastDraft) return;
+  await navigator.clipboard.writeText(lastDraft);
+  showToast();
+});
+
+document.getElementById("regenBtn").addEventListener("click", async () => {
+  if (!lastIncoming) return;
+  document.getElementById("draft").textContent = "Генерирую…";
+  const res = await fetch("/api/draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: lastIncoming }),
+  });
+  const state = await res.json();
+  render(state);
+});
+</script>
+</body>
+</html>

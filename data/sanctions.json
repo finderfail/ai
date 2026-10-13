@@ -1,0 +1,34 @@
+{
+  "_comment": "Список блокировок. Файл перечитывается автоматически при каждом изменении, перезапуск сервера не нужен. Допустимые reason: USER_SANCTIONED, COMPANY_SANCTIONED, SANCTIONED_COUNTRY, ABUSE_DETECTED, PAYMENT_FRAUD, MANUAL_REVIEW.",
+  "enabled": true,
+  "blocked_emails": [
+    {
+      "email": "demo.blocked@example.com",
+      "reason": "USER_SANCTIONED",
+      "note": "Демо-запись: персональные санкции",
+      "since": "2026-08-20"
+    },
+    {
+      "email": "staff@kriloud.a",
+      "reason": "COMPANY_SANCTIONED",
+      "note": "Cанкции на организацию",
+      "since": "2026-08-20"
+    }
+  ],
+  "blocked_domains": [
+    {
+      "domain": "demo-sanctioned-corp.com",
+      "reason": "COMPANY_SANCTIONED",
+      "note": "Демо-запись: блокировка всего почтового домена компании",
+      "since": "2026-08-20"
+    }
+  ],
+  "blocked_countries": [
+    {
+      "code": "XX",
+      "reason": "SANCTIONED_COUNTRY",
+      "note": "Демо-запись: заглушка кода страны, замените на реальный ISO-код",
+      "since": "2026-08-20"
+    }
+  ]
+}

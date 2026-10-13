@@ -1,0 +1,24 @@
+# HTML 3.2：フォームとアプレット
+
+```html
+<FORM ACTION="/cgi-bin/order.pl" METHOD=POST>
+名前：<INPUT TYPE=TEXT NAME="name" SIZE=30 MAXLENGTH=50><BR>
+パスワード：<INPUT TYPE=PASSWORD NAME="pass"><BR>
+<INPUT TYPE=CHECKBOX NAME="news" VALUE="yes" CHECKED> 購読<BR>
+<INPUT TYPE=RADIO NAME="pay" VALUE="card"> カード
+<INPUT TYPE=RADIO NAME="pay" VALUE="cash" CHECKED> 現金<BR>
+<SELECT NAME="color" SIZE=1>
+  <OPTION VALUE="r">赤
+  <OPTION VALUE="g" SELECTED>緑
+</SELECT><BR>
+<TEXTAREA NAME="comment" ROWS=4 COLS=40></TEXTAREA><BR>
+<INPUT TYPE=FILE NAME="photo"> <INPUT TYPE=HIDDEN NAME="id" VALUE="42">
+<INPUT TYPE=SUBMIT VALUE="送信"> <INPUT TYPE=RESET VALUE="クリア">
+</FORM>
+
+<APPLET CODE="Clock.class" WIDTH=150 HEIGHT=50>
+<PARAM NAME="color" VALUE="blue">お使いのブラウザは Java に対応していません。
+</APPLET>
+```
+
+3.2 の `INPUT` の種類：TEXT、PASSWORD、CHECKBOX、RADIO、SUBMIT、RESET、FILE、HIDDEN、IMAGE。組み込みの検証、`<LABEL>`、`<BUTTON>`、email/date などの型はなかった。フォームの処理はサーバーの CGI スクリプトで行った。

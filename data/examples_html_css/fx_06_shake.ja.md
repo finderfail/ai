@@ -1,0 +1,12 @@
+# HTML/CSS の例: エラー時のシェイク
+
+誤入力で入力欄が揺れる。
+
+```html
+<input class="shake" aria-invalid="true">
+```
+
+```css
+.shake[aria-invalid="true"] { border-color: #dc2626; animation: shake .4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+```

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Банан</title>
+    <style>
+        .banana {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background-color: yellowgreen;
+            position: relative;
+            animation: grow 3s infinite, shrink 1.5s ease-in-out forwards;
+        }
+
+        @keyframes grow {
+            from { transform: scale(0); }
+            to { transform: scale(2); }
+        }
+
+        @keyframes shrink {
+            from { transform: scale(2); }
+            to { transform: scale(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="banana"></div>
+</body>
+</html>
