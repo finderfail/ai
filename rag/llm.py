@@ -16,10 +16,12 @@ def check_ollama_available() -> tuple[bool, str]:
         return False, f"Ollama недоступна на {config.OLLAMA_HOST}: {exc}"
 
     models = [m["name"] for m in resp.json().get("models", [])]
-    if not any(m.startswith(config.OLLAMA_MODEL) for m in models):
+    required = sorted({model["ollama_model"] for model in config.MODELS.values()})
+    missing = [name for name in required if not any(m.startswith(name) for m in models)]
+    if missing:
         return False, (
-            f"Модель {config.OLLAMA_MODEL!r} не найдена в Ollama. "
-            f"Выполните: ollama pull {config.OLLAMA_MODEL}"
+            f"Модели не найдены в Ollama: {', '.join(missing)}. "
+            f"Выполните: ollama pull {' '.join(missing)}"
         )
     return True, "ok"
 

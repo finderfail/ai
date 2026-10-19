@@ -16,10 +16,14 @@ def _get_model():
     return _model
 
 
-def embed_passages(texts: list[str]) -> np.ndarray:
+def embed_passages(texts: list[str], show_progress: bool = False) -> np.ndarray:
     model = _get_model()
     prefixed = [f"passage: {t}" for t in texts]
-    vectors = model.encode(prefixed, normalize_embeddings=True, show_progress_bar=False)
+    vectors = model.encode(
+        prefixed,
+        normalize_embeddings=True,
+        show_progress_bar=show_progress,
+    )
     return np.asarray(vectors, dtype=np.float32)
 
 

@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     plan TEXT NOT NULL DEFAULT 'free',
     language TEXT NOT NULL DEFAULT 'ru',
     governance INTEGER NOT NULL DEFAULT 0,
-    model TEXT NOT NULL DEFAULT 'kriloud',
+    model TEXT NOT NULL DEFAULT 'flock',
     created_at TEXT NOT NULL
 );
 
@@ -98,7 +98,8 @@ def init_db() -> None:
         if "governance" not in _columns(conn, "users"):
             conn.execute("ALTER TABLE users ADD COLUMN governance INTEGER NOT NULL DEFAULT 0")
         if "model" not in _columns(conn, "users"):
-            conn.execute("ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT 'kriloud'")
+            conn.execute("ALTER TABLE users ADD COLUMN model TEXT NOT NULL DEFAULT 'flock'")
+        conn.execute("UPDATE users SET model = ? WHERE model = 'kriloud'", (config.DEFAULT_MODEL,))
         if "mode" in _columns(conn, "usage_events"):
             conn.executescript(LEGACY_USAGE_REBUILD)
             conn.executescript(SCHEMA)

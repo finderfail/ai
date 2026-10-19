@@ -880,9 +880,9 @@ const apiConfigEl = document.getElementById("apiConfig");
 function continueConfig(key) {
   return [
     "models:",
-    "  - name: Universal Kriloud AI",
+    "  - name: Universal Kriloud AI FLOCK",
     "    provider: openai",
-    "    model: kriloud",
+    "    model: flock",
     `    apiBase: ${window.location.origin}/v1`,
     `    apiKey: ${key || "ukai-..."}`,
     "    roles:",

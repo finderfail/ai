@@ -50,6 +50,7 @@ INDEX_DIR = ROOT_DIR / "index"
 INDEX_EMBEDDINGS_PATH = INDEX_DIR / "embeddings.npy"
 INDEX_CHUNKS_PATH = INDEX_DIR / "chunks.json"
 INDEX_LEXICAL_PATH = INDEX_DIR / "lexical.json"
+INDEX_META_PATH = INDEX_DIR / "meta.json"
 
 DOMAIN_DIRS = {
     "matan": KB_DIR,
@@ -105,7 +106,7 @@ GOVERNANCE_DOMAINS = set(GOVERNANCE_DOMAIN_DIRS.keys())
 
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
 
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:270m")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
@@ -114,8 +115,8 @@ REPEAT_PENALTY = float(os.getenv("REPEAT_PENALTY", "1.15"))
 TOP_P = float(os.getenv("TOP_P", "0.9"))
 
 MAX_FILE_CHARS = int(os.getenv("MAX_FILE_CHARS", "1000"))
-NUM_CTX = int(os.getenv("NUM_CTX", "32768"))
-CONTEXT_CHAR_BUDGET = int(os.getenv("CONTEXT_CHAR_BUDGET", "60000"))
+NUM_CTX = int(os.getenv("NUM_CTX", "4096"))
+CONTEXT_CHAR_BUDGET = int(os.getenv("CONTEXT_CHAR_BUDGET", "4000"))
 
 RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.822"))
 RELEVANCE_Z_MIN = float(os.getenv("RELEVANCE_Z_MIN", "2.0"))
@@ -195,16 +196,16 @@ TEMPERATURE = float(os.getenv("TEMPERATURE", "0.3"))
 RAG_DOMAINS = ALL_DOMAINS
 
 MODELS = {
-    "kriloud": {
-        "label": "Kriloud",
-        "ollama_model": OLLAMA_MODEL,
+    "flock": {
+        "label": "FLOCK",
+        "ollama_model": os.getenv("FLOCK_OLLAMA_MODEL", "gemma3:1b"),
         "governance_only": False,
-        "rag_limit": int(os.getenv("KRILOUD_RAG_LIMIT", "10")),
-        "rag_margin": float(os.getenv("KRILOUD_RAG_MARGIN", "0.05")),
-        "history_limit": None,
-        "temperature": None,
-        "num_predict": None,
-        "style": None,
+        "rag_limit": int(os.getenv("FLOCK_RAG_LIMIT", "2")),
+        "rag_margin": float(os.getenv("FLOCK_RAG_MARGIN", "0.08")),
+        "history_limit": int(os.getenv("FLOCK_HISTORY_LIMIT", "4")),
+        "temperature": float(os.getenv("FLOCK_TEMPERATURE", "0.3")),
+        "num_predict": int(os.getenv("FLOCK_MAX_TOKENS", "320")),
+        "style": STRICT_GROUNDING,
         "compact": False,
     },
     "kriloud-flash": {
@@ -215,25 +216,13 @@ MODELS = {
         "rag_margin": None,
         "history_limit": int(os.getenv("FLASH_HISTORY_LIMIT", "2")),
         "temperature": float(os.getenv("FLASH_TEMPERATURE", "0.1")),
-        "num_predict": int(os.getenv("FLASH_MAX_TOKENS", "60")),
+        "num_predict": int(os.getenv("FLASH_MAX_TOKENS", "600")),
         "style": None,
         "compact": True,
     },
-    "flock": {
-        "label": "FLOCK",
-        "ollama_model": os.getenv("FLOCK_OLLAMA_MODEL", OLLAMA_MODEL),
-        "governance_only": True,
-        "rag_limit": int(os.getenv("FLOCK_RAG_LIMIT", "30")),
-        "rag_margin": float(os.getenv("FLOCK_RAG_MARGIN", "0.08")),
-        "history_limit": None,
-        "temperature": float(os.getenv("FLOCK_TEMPERATURE", "0.3")),
-        "num_predict": None,
-        "style": STRICT_GROUNDING,
-        "compact": False,
-    },
 }
 
-DEFAULT_MODEL = "kriloud"
+DEFAULT_MODEL = "flock"
 
 FLASH_SYSTEM_PROMPT = (
     "Ты быстрый ассистент. Отвечай одним-двумя короткими предложениями, сразу по сути. "

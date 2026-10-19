@@ -1,0 +1,4 @@
+{
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "documents": 1286
+}

@@ -33,10 +33,19 @@ db.init_db()
 def _warm_up() -> None:
     try:
         from rag.embeddings import embed_query
+        from rag.llm import stream_generate
         from rag.pipeline import _get_store
 
         _get_store()
         embed_query("warm up")
+        default_model = config.MODELS[config.DEFAULT_MODEL]["ollama_model"]
+        for _ in stream_generate(
+            "warm up",
+            config.TEMPERATURE,
+            model=default_model,
+            options={"num_predict": 1},
+        ):
+            pass
     except Exception:
         pass
 
@@ -253,7 +262,14 @@ def usage(user: accounts.User = Depends(require_user)):
 @app.get("/api/health")
 def health():
     ok, message = check_ollama_available()
-    return {"ok": ok, "message": message, "model": config.OLLAMA_MODEL, "queue": model_queue.stats()}
+    models = sorted({model["ollama_model"] for model in config.MODELS.values()})
+    return {
+        "ok": ok,
+        "message": message,
+        "model": config.MODELS[config.DEFAULT_MODEL]["ollama_model"],
+        "models": models,
+        "queue": model_queue.stats(),
+    }
 
 
 def sse(payload: dict) -> str:
