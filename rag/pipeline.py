@@ -130,9 +130,7 @@ def retrieve(
 
 
 def build_context_block(hits: list[tuple[Chunk, float]]) -> str:
-    parts = []
-    for chunk, _ in hits:
-        parts.append(chunk.text)
+    parts = [chunk.text for chunk, _ in reversed(hits)]
     return "\n\n---\n\n".join(parts)
 
 

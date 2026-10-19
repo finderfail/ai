@@ -203,7 +203,7 @@ MODELS = {
         "rag_limit": int(os.getenv("FLOCK_RAG_LIMIT", "2")),
         "rag_margin": float(os.getenv("FLOCK_RAG_MARGIN", "0.08")),
         "history_limit": int(os.getenv("FLOCK_HISTORY_LIMIT", "4")),
-        "temperature": float(os.getenv("FLOCK_TEMPERATURE", "0.3")),
+        "temperature": float(os.getenv("FLOCK_TEMPERATURE", "0.1")),
         "num_predict": int(os.getenv("FLOCK_MAX_TOKENS", "320")),
         "style": STRICT_GROUNDING,
         "compact": False,
