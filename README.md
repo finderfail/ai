@@ -307,7 +307,21 @@ cp .env.example .env
 HuggingFace до загрузки модели эмбеддингов. Интернет нужен только для
 `pip install` и первой загрузки модели эмбеддингов в кэш.
 
-### 4. Собрать векторный индекс базы знаний
+### 4. Модель эмбеддингов
+
+```bash
+python -m rag.fetch_model
+```
+
+Один раз скачивает `intfloat/multilingual-e5-small` (`config.json`,
+`tokenizer.json`, `model.safetensors`, ~470 МБ) в `models/multilingual-e5-small`
+(папка в `.gitignore`). Если Hugging Face недоступен, можно задать зеркало
+(`HF_ENDPOINT=https://hf-mirror.com python -m rag.fetch_model`) или скопировать
+эти три файла с другой машины и указать папку в `EMBEDDING_MODEL_DIR`. Если
+модель уже лежит в кеше Hugging Face (`~/.cache/huggingface/hub`), скачивать
+не нужно.
+
+### 5. Собрать векторный индекс базы знаний
 
 ```bash
 python -m rag.ingest
@@ -327,9 +341,33 @@ python -m rag.ingest
 
 ## Запуск
 
-```bash
+Веб-интерфейс, `/api` и `/v1` отдаёт один процесс:
 
-```uvicorn web.server:app --host 0.0.0.0 --port 8000
+```bash
+.venv/bin/uvicorn web.server:app --host 0.0.0.0 --port 8000
+```
+
+На сервере за Caddy лучше слушать только локальный адрес и держать процесс
+под systemd (`/etc/systemd/system/kriloud.service`):
+
+```ini
+[Unit]
+Description=Universal Kriloud AI
+After=network-online.target
+
+[Service]
+WorkingDirectory=/root/ai
+ExecStart=/root/ai/.venv/bin/uvicorn web.server:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload && systemctl enable --now kriloud
+journalctl -u kriloud -f
+```
 
 Открыть [http://127.0.0.1:8000](http://127.0.0.1:8000). При первом старте
 сервер сам мигрирует `data/platform.db`: существующим аккаунтам ставится

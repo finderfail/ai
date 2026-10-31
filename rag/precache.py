@@ -6,7 +6,10 @@ import time
 import requests
 
 from . import answer_cache, config
+from .llm import check_ollama_available
 from .pipeline import answer_stream, is_cross_lingual
+
+MAX_FAILURES_IN_ROW = 3
 
 
 def read_questions() -> list[str]:
@@ -27,7 +30,7 @@ def domain_sets(model_id: str) -> list[set[str]]:
 def run(models: list[str], questions: list[tuple[str, str]]) -> None:
     answer_cache.origin = "precache"
     total = len(models) * len(questions)
-    done = cached = failed = empty = 0
+    done = cached = failed = empty = in_row = 0
     started = time.perf_counter()
     for model_id in models:
         request = config.model_request(model_id, None)
@@ -46,8 +49,15 @@ def run(models: list[str], questions: list[tuple[str, str]]) -> None:
                     text = "".join(stream)
                 except requests.RequestException as exc:
                     failed += 1
+                    in_row += 1
                     print(f"[{done}/{total}] {model_id} {language} ошибка модели: {exc}")
+                    if in_row >= MAX_FAILURES_IN_ROW:
+                        raise SystemExit(
+                            f"{MAX_FAILURES_IN_ROW} ошибки подряд, останавливаюсь. "
+                            f"Проверьте OLLAMA_HOST={config.OLLAMA_HOST} в .env"
+                        )
                     continue
+                in_row = 0
                 print(f"[{done}/{total}] {model_id} {language} {time.perf_counter() - t0:5.1f} с  {question[:60]}")
                 if not text.strip():
                     empty += 1
@@ -86,6 +96,10 @@ def main() -> None:
 
     if not config.ANSWER_CACHE:
         raise SystemExit("Кеш ответов выключен (ANSWER_CACHE=0)")
+    ok, message = check_ollama_available()
+    if not ok:
+        raise SystemExit(f"{message}\nАдрес берётся из OLLAMA_HOST в {config.ROOT_DIR / '.env'}")
+    print(f"Ollama: {config.OLLAMA_HOST}, вопросов: {len(questions)}, модели: {', '.join(models)}")
     run(models, questions)
 
 
