@@ -1,4 +1,4 @@
-sentence-transformers==3.3.1
+tokenizers>=0.19
 numpy>=1.26,<3
 requests>=2.31
 fastapi>=0.115

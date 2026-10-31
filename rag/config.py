@@ -47,10 +47,8 @@ HTML5_DIR = ROOT_DIR / "data" / "html5"
 HTML3_DIR = ROOT_DIR / "data" / "html3"
 EXAMPLES_HTML_CSS_DIR = ROOT_DIR / "data" / "examples_html_css"
 INDEX_DIR = ROOT_DIR / "index"
-INDEX_EMBEDDINGS_PATH = INDEX_DIR / "embeddings.npy"
-INDEX_CHUNKS_PATH = INDEX_DIR / "chunks.json"
-INDEX_LEXICAL_PATH = INDEX_DIR / "lexical.json"
-INDEX_META_PATH = INDEX_DIR / "meta.json"
+INDEX_DB_PATH = INDEX_DIR / "rag.db"
+CACHE_DB_PATH = INDEX_DIR / "cache.db"
 
 DOMAIN_DIRS = {
     "matan": KB_DIR,
@@ -105,6 +103,19 @@ GOVERNANCE_DOMAIN_DIRS = (
 GOVERNANCE_DOMAINS = set(GOVERNANCE_DOMAIN_DIRS.keys())
 
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
+EMBEDDING_MODEL_DIR = os.getenv("EMBEDDING_MODEL_DIR", "")
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "16"))
+QUERY_CACHE_SIZE = int(os.getenv("QUERY_CACHE_SIZE", "4096"))
+QUERY_CACHE_DISK_ROWS = int(os.getenv("QUERY_CACHE_DISK_ROWS", "50000"))
+RETRIEVAL_CACHE_SIZE = int(os.getenv("RETRIEVAL_CACHE_SIZE", "2048"))
+ANSWER_CACHE = os.getenv("ANSWER_CACHE", "1") == "1"
+ANSWER_CACHE_TTL_DAYS = float(os.getenv("ANSWER_CACHE_TTL_DAYS", "30"))
+ANSWER_CACHE_MAX_ROWS = int(os.getenv("ANSWER_CACHE_MAX_ROWS", "20000"))
+CLIENT_SYSTEM_MAX_CHARS = int(os.getenv("CLIENT_SYSTEM_MAX_CHARS", "1500"))
+PRECACHE_QUESTIONS_PATH = ROOT_DIR / "data" / "precache" / "questions.txt"
+CROSS_LINGUAL_THRESHOLD = float(os.getenv("CROSS_LINGUAL_THRESHOLD", "0.825"))
+CROSS_LINGUAL_STYLE_THRESHOLD = float(os.getenv("CROSS_LINGUAL_STYLE_THRESHOLD", "0.83"))
+CROSS_LINGUAL_STYLE_DOMAINS = {"dialog_ja", "insults"}
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:270m")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -129,7 +140,13 @@ LEXICAL_COVERAGE_MIN = float(os.getenv("LEXICAL_COVERAGE_MIN", "0.28"))
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 
+IDENTITY_PROMPT = (
+    "Ты — Universal Kriloud AI от команды Universal Kriloud Infrastructure. "
+    "Не называй базовую модель, её размер и разработчика: эти детали не раскрываются."
+)
+
 SYSTEM_PROMPT = (
+    IDENTITY_PROMPT + " "
     "Ты — агент, который внимательно слушает пользователя и выполняет поставленные им задачи. "
     "Отвечай по делу, без самолюбования и без лишних представлений."
 )
@@ -225,6 +242,7 @@ MODELS = {
 DEFAULT_MODEL = "flock"
 
 FLASH_SYSTEM_PROMPT = (
+    IDENTITY_PROMPT + " "
     "Ты быстрый ассистент. Отвечай одним-двумя короткими предложениями, сразу по сути. "
     "Если нужна команда или код — дай только её, одной строкой."
 )

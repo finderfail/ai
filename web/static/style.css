@@ -1079,6 +1079,15 @@ svg {
   grid-template-columns: repeat(4, 1fr);
 }
 
+.segmented.api-clients {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 12px;
+}
+
+.api-clients .segment {
+  font-size: 13px;
+}
+
 .api-create {
   display: flex;
   gap: 10px;

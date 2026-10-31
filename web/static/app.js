@@ -877,28 +877,100 @@ const apiNewEl = document.getElementById("apiNew");
 const apiNewKeyEl = document.getElementById("apiNewKey");
 const apiConfigEl = document.getElementById("apiConfig");
 
-function continueConfig(key) {
+const apiClientsEl = document.getElementById("apiClients");
+const apiConfigNameEl = document.getElementById("apiConfigName");
+const apiNoteEl = document.getElementById("apiNote");
+let apiClient = "continue";
+let apiKeyValue = "";
+
+function apiModels() {
+  const models = account && Array.isArray(account.models) ? account.models : [];
+  return models.length ? models : [{ id: "kriloud-flash", label: "Flash" }];
+}
+
+function preferredModel(models) {
+  const strong = models.find((m) => m.id !== "kriloud-flash");
+  return (strong || models[0]).id;
+}
+
+function continueConfig(key, models) {
+  const lines = ["models:"];
+  models.forEach((m) => {
+    lines.push(
+      `  - name: Universal Kriloud AI ${m.label}`,
+      "    provider: openai",
+      `    model: ${m.id}`,
+      `    apiBase: ${window.location.origin}/v1`,
+      `    apiKey: ${key}`,
+      "    roles:",
+      "      - chat",
+      m.id === "kriloud-flash" ? "      - autocomplete" : "      - edit"
+    );
+  });
+  return lines.join("\n");
+}
+
+function opencodeConfig(key, models) {
+  const entries = {};
+  models.forEach((m) => {
+    entries[m.id] = { name: `Universal Kriloud AI ${m.label}` };
+  });
+  return JSON.stringify(
+    {
+      $schema: "https://opencode.ai/config.json",
+      provider: {
+        kriloud: {
+          npm: "@ai-sdk/openai-compatible",
+          name: "Universal Kriloud AI",
+          options: { baseURL: `${window.location.origin}/v1`, apiKey: key },
+          models: entries
+        }
+      },
+      model: `kriloud/${preferredModel(models)}`,
+      small_model: `kriloud/${models.some((m) => m.id === "kriloud-flash") ? "kriloud-flash" : models[0].id}`
+    },
+    null,
+    2
+  );
+}
+
+function claudeConfig(key, models) {
+  const fast = models.some((m) => m.id === "kriloud-flash") ? "kriloud-flash" : models[0].id;
   return [
-    "models:",
-    "  - name: Universal Kriloud AI FLOCK",
-    "    provider: openai",
-    "    model: flock",
-    `    apiBase: ${window.location.origin}/v1`,
-    `    apiKey: ${key || "ukai-..."}`,
-    "    roles:",
-    "      - chat",
-    "      - edit",
-    "      - apply",
-    "  - name: Universal Kriloud AI Flash",
-    "    provider: openai",
-    "    model: kriloud-flash",
-    `    apiBase: ${window.location.origin}/v1`,
-    `    apiKey: ${key || "ukai-..."}`,
-    "    roles:",
-    "      - chat",
-    "      - autocomplete"
+    `export ANTHROPIC_BASE_URL=${window.location.origin}`,
+    `export ANTHROPIC_AUTH_TOKEN=${key}`,
+    `export ANTHROPIC_MODEL=${preferredModel(models)}`,
+    `export ANTHROPIC_DEFAULT_HAIKU_MODEL=${fast}`,
+    `export ANTHROPIC_SMALL_FAST_MODEL=${fast}`,
+    "claude"
   ].join("\n");
 }
+
+const API_CLIENTS = {
+  continue: { file: "~/.continue/config.yaml", build: continueConfig },
+  opencode: { file: "opencode.json", build: opencodeConfig },
+  claude: { file: "terminal", build: claudeConfig }
+};
+
+function renderApiConfig() {
+  const client = API_CLIENTS[apiClient];
+  apiClientsEl.querySelectorAll(".segment").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.client === apiClient);
+  });
+  apiConfigNameEl.textContent = client.file;
+  apiConfigEl.textContent = client.build(apiKeyValue || "ukai-...", apiModels());
+  apiNoteEl.textContent = t(`api.note.${apiClient}`);
+}
+
+onUi("language", renderApiConfig);
+onUi("account", renderApiConfig);
+
+apiClientsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest(".segment");
+  if (!btn) return;
+  apiClient = btn.dataset.client;
+  renderApiConfig();
+});
 
 function formatDate(iso) {
   if (!iso) return t("api.never");
@@ -943,7 +1015,8 @@ function renderKeys(keys) {
 
 async function loadKeys() {
   apiErrorEl.hidden = true;
-  if (apiNewEl.hidden) apiConfigEl.textContent = continueConfig("");
+  if (apiNewEl.hidden) apiKeyValue = "";
+  renderApiConfig();
   try {
     const keys = await fetch("/api/keys", { headers: langHeaders() }).then((r) => r.json());
     renderKeys(Array.isArray(keys) ? keys : []);
@@ -970,7 +1043,8 @@ document.getElementById("apiCreate").addEventListener("submit", async (e) => {
     apiNameEl.value = "";
     apiNewKeyEl.textContent = data.key;
     apiNewEl.hidden = false;
-    apiConfigEl.textContent = continueConfig(data.key);
+    apiKeyValue = data.key;
+    renderApiConfig();
     loadKeys();
   } catch (_) {
     apiErrorEl.textContent = t("chat.connError");

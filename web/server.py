@@ -13,9 +13,10 @@ from pydantic import BaseModel
 from rag import config
 from rag.draft import generate_draft
 from rag.llm import check_ollama_available
-from rag.pipeline import answer_stream
+from rag import answer_cache, embeddings
+from rag.pipeline import answer_stream, retrieval_cache_stats
 
-from . import accounts, db, geo, i18n, openai_api, sanctions
+from . import accounts, anthropic_api, db, geo, i18n, openai_api, sanctions
 from .model_queue import closing_stream, model_queue, queued
 
 app = FastAPI(title="Kriloud AI")
@@ -269,6 +270,11 @@ def health():
         "model": config.MODELS[config.DEFAULT_MODEL]["ollama_model"],
         "models": models,
         "queue": model_queue.stats(),
+        "cache": {
+            "answers": answer_cache.stats(),
+            "embeddings": embeddings.cache_stats(),
+            "retrieval": retrieval_cache_stats(),
+        },
     }
 
 
@@ -360,5 +366,6 @@ def login_page():
 
 
 app.include_router(openai_api.router)
+app.include_router(anthropic_api.router)
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

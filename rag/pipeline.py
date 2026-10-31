@@ -1,39 +1,56 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
+from collections import OrderedDict
 from collections.abc import Iterator
 
-from . import calculator, config, currency
-from .embeddings import embed_query
+from . import answer_cache, calculator, config, currency
+from .embeddings import embed_query, normalize_query
 from .llm import stream_chat
 from .store import Chunk, VectorStore, flatten
 
 _store: VectorStore | None = None
+_store_lock = threading.Lock()
+_checked_at = 0.0
+_retrieval_cache: OrderedDict[tuple, list[tuple[Chunk, float]]] = OrderedDict()
+_cache_lock = threading.Lock()
+
+STORE_CHECK_SECONDS = 2.0
+CJK_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]")
+CYRILLIC_RE = re.compile(r"[а-яА-ЯёЁ]")
 
 
 def _get_store() -> VectorStore:
-    global _store
-    if _store is None:
-        _store = VectorStore.load()
+    global _store, _checked_at
+    now = time.monotonic()
+    if _store is not None and now - _checked_at < STORE_CHECK_SECONDS:
+        return _store
+    with _store_lock:
+        _checked_at = now
+        try:
+            version = config.INDEX_DB_PATH.stat().st_mtime
+        except OSError:
+            version = None
+        if _store is None or (version is not None and version != _store.version):
+            _store = VectorStore.load()
+            with _cache_lock:
+                _retrieval_cache.clear()
     return _store
 
 
-def localize(
-    store: VectorStore, hits: list[tuple[Chunk, float]], language: str | None
-) -> list[tuple[Chunk, float]]:
-    seen: set[tuple[str, str]] = set()
-    result: list[tuple[Chunk, float]] = []
-    for chunk, score in hits:
-        if chunk.base_key in seen:
-            continue
-        seen.add(chunk.base_key)
-        result.append((store.variant(chunk, language) if language else chunk, score))
-    return result
+def is_cross_lingual(query: str) -> bool:
+    return bool(CJK_RE.search(query)) and not CYRILLIC_RE.search(query)
+
+
+def retrieval_cache_stats() -> dict:
+    with _cache_lock:
+        return {"size": len(_retrieval_cache)}
 
 
 LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9&+.-]*")
 ACRONYM_RE = re.compile(r"\b[А-ЯЁ]{2,6}\b")
-CJK_RUN_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]{3,}")
 
 
 def query_phrases(query: str) -> set[str]:
@@ -45,9 +62,6 @@ def query_phrases(query: str) -> set[str]:
     for size in (2, 3):
         for i in range(len(words) - size + 1):
             phrases.add(" ".join(words[i : i + size]))
-    for run in CJK_RUN_RE.findall(query):
-        for i in range(len(run) - 2):
-            phrases.add(run[i : i + 3])
     return {p for p in phrases if len(p) >= 3 or (len(p) >= 2 and p.isalpha() and not p.isascii())}
 
 
@@ -91,35 +105,72 @@ def retrieve(
     limit: int | None = None,
     margin: float | None = None,
 ) -> list[tuple[Chunk, float]]:
+    query = normalize_query(query)
     domains = scope_domains(query, domains)
     store = _get_store()
+    key = (query, frozenset(domains), limit, margin, store.version)
+    with _cache_lock:
+        cached = _retrieval_cache.get(key)
+        if cached is not None:
+            _retrieval_cache.move_to_end(key)
+            return list(cached)
+
+    selected = _retrieve(store, query, domains, limit, margin)
+
+    with _cache_lock:
+        _retrieval_cache[key] = selected
+        while len(_retrieval_cache) > config.RETRIEVAL_CACHE_SIZE:
+            _retrieval_cache.popitem(last=False)
+    return list(selected)
+
+
+def _retrieve(
+    store: VectorStore,
+    query: str,
+    domains: set[str],
+    limit: int | None,
+    margin: float | None,
+) -> list[tuple[Chunk, float]]:
     query_vector = embed_query(query)
-    hits = store.search(query_vector, domains=domains)
+    all_scores = store.embeddings @ query_vector
+    cross_lingual = is_cross_lingual(query)
+    threshold = config.RELEVANCE_THRESHOLD
+    if not cross_lingual:
+        hits = store.search(query_vector, domains=domains, scores=all_scores)
+    else:
+        threshold = config.CROSS_LINGUAL_THRESHOLD
+        content = domains - config.CROSS_LINGUAL_STYLE_DOMAINS
+        hits = store.search(query_vector, domains=content, scores=all_scores)
+        if not hits or hits[0][1] < threshold:
+            threshold = config.CROSS_LINGUAL_STYLE_THRESHOLD
+            hits = store.search(
+                query_vector, domains=domains & config.CROSS_LINGUAL_STYLE_DOMAINS, scores=all_scores
+            )
     if not hits:
         return []
 
-    all_scores = store.embeddings @ query_vector
     spread = float(all_scores.std())
     top_score = hits[0][1]
     z_score = (top_score - float(all_scores.mean())) / spread if spread > 0 else 0.0
 
-    if top_score < config.RELEVANCE_THRESHOLD or z_score < config.RELEVANCE_Z_MIN:
+    if top_score < threshold or z_score < config.RELEVANCE_Z_MIN:
         return []
 
     margin = config.RELEVANCE_MARGIN if margin is None else margin
-    floor = max(config.RELEVANCE_THRESHOLD, top_score - margin)
+    floor = max(threshold, top_score - margin)
     relevant = [(chunk, score) for chunk, score in hits if score >= floor]
 
     if store.lexical is not None:
-        coverage = max(store.lexical.query_coverage(query, chunk.id) for chunk, _ in relevant)
-        if coverage < config.LEXICAL_COVERAGE_MIN:
-            return []
+        if not cross_lingual:
+            coverage = max(store.lexical.query_coverage(query, chunk.id) for chunk, _ in relevant)
+            if coverage < config.LEXICAL_COVERAGE_MIN:
+                return []
         if config.ENTITY_FOCUS:
             relevant = focus_on_entities(store, query, relevant)
 
     selected: list[tuple[Chunk, float]] = []
     used = 0
-    for chunk, score in localize(store, relevant, language):
+    for chunk, score in relevant:
         if limit is not None and len(selected) >= limit:
             break
         if used + len(chunk.text) > config.CONTEXT_CHAR_BUDGET:
@@ -156,14 +207,49 @@ def answer_stream(
     if converted:
         return [], iter([converted])
 
-    hits = retrieve(
-        question,
-        domains=domains if domains is not None else config.RAG_DOMAINS,
-        language=language,
-        limit=max_hints,
-        margin=rag_margin,
-    )
+    domains = domains if domains is not None else config.RAG_DOMAINS
+    hits = retrieve(question, domains=domains, language=language, limit=max_hints, margin=rag_margin)
+    usage = {} if usage is None else usage
+    params = {
+        "ollama_model": ollama_model or config.OLLAMA_MODEL,
+        "client_system": client_system,
+        "temperature": temperature,
+        "options": options,
+        "max_hints": max_hints,
+        "rag_margin": rag_margin,
+        "compact": compact,
+    }
+    token_stream = _model_stream(question, history, usage, language, hits, **params)
+    if history:
+        return hits, token_stream
 
+    profile = answer_cache.profile_signature(params, language)
+    hints = answer_cache.hints_signature(hits)
+    cached = answer_cache.lookup(profile, question, hints)
+    if cached is not None:
+        token_stream.close()
+        return hits, answer_cache.replay(cached, usage)
+
+    def remember(text: str) -> None:
+        answer_cache.store(profile, params["ollama_model"], language, question, hints, text, usage)
+
+    return hits, answer_cache.recording(token_stream, remember)
+
+
+def _model_stream(
+    question: str,
+    history: list[dict] | None,
+    usage: dict,
+    language: str,
+    hits: list[tuple[Chunk, float]],
+    ollama_model: str,
+    client_system: str | None,
+    temperature: float | None,
+    options: dict | None,
+    max_hints: int | None,
+    rag_margin: float | None,
+    compact: bool,
+) -> Iterator[str]:
     language_config = config.LANGUAGES.get(language, config.LANGUAGES[config.DEFAULT_LANGUAGE])
     if compact:
         system_prompt = config.FLASH_SYSTEM_PROMPT
@@ -173,7 +259,7 @@ def answer_stream(
             system_prompt = f"{system_prompt}\n\n{client_system}"
         system_prompt = f"{system_prompt}\n\n{language_config['instruction']}"
         messages = [{"role": "system", "content": system_prompt}, *(history or []), {"role": "user", "content": question}]
-        return hits, stream_chat(
+        return stream_chat(
             messages,
             temperature=config.TEMPERATURE if temperature is None else temperature,
             usage=usage,
@@ -196,7 +282,7 @@ def answer_stream(
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
-    return hits, stream_chat(
+    return stream_chat(
         messages,
         temperature=config.TEMPERATURE if temperature is None else temperature,
         usage=usage,

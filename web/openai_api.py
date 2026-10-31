@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import time
 
@@ -89,11 +90,19 @@ def authenticate(request: Request) -> accounts.User:
     return user
 
 
-def resolve_model(user: accounts.User, requested: str | None) -> str:
+REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
+
+
+def resolve_model(user: accounts.User, requested: str | None, aliases: bool = False) -> str:
     if not requested:
         return user.active_model
     if requested in user.available_models:
         return requested
+    lowered = requested.lower()
+    if aliases and lowered.startswith("claude"):
+        if "haiku" in lowered and "kriloud-flash" in user.available_models:
+            return "kriloud-flash"
+        return user.active_model
     raise ApiError(
         404,
         i18n.text("model_not_found", user.language, model=requested),
@@ -104,7 +113,7 @@ def resolve_model(user: accounts.User, requested: str | None) -> str:
 
 def text_of(content) -> str:
     if isinstance(content, str):
-        return content
+        return REMINDER_RE.sub("", content).strip()
     if isinstance(content, list):
         parts = []
         for part in content:
@@ -112,8 +121,22 @@ def text_of(content) -> str:
                 parts.append(str(part.get("text", "")))
             elif isinstance(part, str):
                 parts.append(part)
-        return "\n".join(parts)
+        return REMINDER_RE.sub("", "\n".join(parts)).strip()
     return ""
+
+
+def client_prompt(system: str, style: str | None) -> str | None:
+    if len(system) > config.CLIENT_SYSTEM_MAX_CHARS:
+        system = ""
+    return "\n\n".join(part for part in (system, style) if part) or None
+
+
+def merge_options(profile: dict | None, client: dict) -> dict | None:
+    merged = {**(profile or {}), **client}
+    limits = [o["num_predict"] for o in (profile or {}, client) if o.get("num_predict")]
+    if limits:
+        merged["num_predict"] = min(limits)
+    return merged or None
 
 
 def split_messages(messages: list[dict]) -> tuple[str, list[dict], str]:
@@ -225,7 +248,10 @@ def chat_completions(req: ChatCompletionRequest, request: Request):
             raise ApiError(400, "messages must end with a user message", "invalid_request_error", "invalid_messages")
         usage: dict = {}
         profile = config.model_request(model_id, history)
-        options = {**(profile.pop("options") or {}), **ollama_options(req.max_completion_tokens or req.max_tokens, req.top_p, req.stop)}
+        options = merge_options(
+            profile.pop("options"),
+            ollama_options(req.max_completion_tokens or req.max_tokens, req.top_p, req.stop),
+        )
         style = profile.pop("client_system")
         if req.temperature is not None:
             profile["temperature"] = req.temperature
@@ -234,8 +260,8 @@ def chat_completions(req: ChatCompletionRequest, request: Request):
             usage=usage,
             language=user.language,
             domains=user.rag_domains,
-            client_system="\n\n".join(part for part in (client_system, style) if part) or None,
-            options=options or None,
+            client_system=client_prompt(client_system, style),
+            options=options,
             **profile,
         )
         max_tokens = req.max_completion_tokens or req.max_tokens

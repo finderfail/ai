@@ -1,4 +1,4 @@
-const CACHE = "ukai-shell-v4";
+const CACHE = "ukai-shell-v5";
 const SHELL = [
   "/",
   "/login",

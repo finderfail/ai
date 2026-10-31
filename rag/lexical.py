@@ -54,22 +54,20 @@ class LexicalIndex:
     idf: dict[str, float]
     avg_length: float
 
-    def to_dict(self) -> dict:
-        return {
-            "doc_tokens": self.doc_tokens,
-            "doc_lengths": self.doc_lengths,
-            "idf": self.idf,
-            "avg_length": self.avg_length,
-        }
-
     @classmethod
-    def from_dict(cls, data: dict) -> "LexicalIndex":
-        return cls(
-            doc_tokens=data["doc_tokens"],
-            doc_lengths=data["doc_lengths"],
-            idf=data["idf"],
-            avg_length=data["avg_length"],
-        )
+    def from_postings(cls, total: int, postings) -> "LexicalIndex":
+        doc_tokens: list[dict[str, int]] = [{} for _ in range(total)]
+        doc_freq: dict[str, int] = {}
+        for doc, term, tf in postings:
+            doc_tokens[doc][term] = tf
+            doc_freq[term] = doc_freq.get(term, 0) + 1
+        doc_lengths = [sum(counts.values()) for counts in doc_tokens]
+        idf = {
+            token: math.log(1 + (total - df + 0.5) / (df + 0.5))
+            for token, df in doc_freq.items()
+        }
+        avg_length = sum(doc_lengths) / total if total else 0.0
+        return cls(doc_tokens, doc_lengths, idf, avg_length)
 
     @classmethod
     def build(cls, texts: list[str]) -> "LexicalIndex":

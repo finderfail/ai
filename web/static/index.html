@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Kriloud AI" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="/style.css?v=27" />
+  <link rel="stylesheet" href="/style.css?v=28" />
 </head>
 <body>
   <div class="app" id="app">
@@ -185,17 +185,22 @@
           </div>
         </div>
         <div class="api-list" id="apiList"></div>
-        <h3 class="usage-title" data-i18n="api.continueTitle"></h3>
+        <h3 class="usage-title" data-i18n="api.setupTitle"></h3>
+        <div class="segmented api-clients" id="apiClients" role="tablist">
+          <button class="segment active" data-client="continue" type="button" role="tab">Continue</button>
+          <button class="segment" data-client="opencode" type="button" role="tab">opencode</button>
+          <button class="segment" data-client="claude" type="button" role="tab">Claude Code</button>
+        </div>
         <div class="code api-config">
-          <div class="code-head"><span>config.yaml</span><button class="code-copy" id="apiCopyConfig" type="button" data-i18n="action.copy"></button></div>
+          <div class="code-head"><span id="apiConfigName">config.yaml</span><button class="code-copy" id="apiCopyConfig" type="button" data-i18n="action.copy"></button></div>
           <pre><code id="apiConfig"></code></pre>
         </div>
-        <p class="modal-note" data-i18n="api.note"></p>
+        <p class="modal-note" id="apiNote"></p>
       </section>
     </div>
   </div>
 
-  <script src="/i18n.js?v=27"></script>
-  <script src="/app.js?v=27"></script>
+  <script src="/i18n.js?v=28"></script>
+  <script src="/app.js?v=28"></script>
 </body>
 </html>

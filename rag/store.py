@@ -1,22 +1,45 @@
 from __future__ import annotations
 
-import json
+import hashlib
+import os
 import re
+import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 from . import config
 from .lexical import LexicalIndex
 
-
-TRANSLATION_SUFFIX = ".ja.md"
 NON_WORD_RE = re.compile(r"[\W_]+")
+
+SCHEMA = """
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE chunks (
+    id INTEGER PRIMARY KEY,
+    domain TEXT NOT NULL,
+    source TEXT NOT NULL,
+    text TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    vector BLOB NOT NULL
+);
+CREATE INDEX chunks_source ON chunks (domain, source);
+CREATE TABLE postings (
+    term TEXT NOT NULL,
+    doc INTEGER NOT NULL,
+    tf INTEGER NOT NULL,
+    PRIMARY KEY (term, doc)
+) WITHOUT ROWID;
+"""
 
 
 def flatten(text: str) -> str:
     return NON_WORD_RE.sub(" ", text.lower().replace("ё", "е")).strip()
 
+
+def digest(text: str) -> str:
+    return hashlib.blake2b(text.encode("utf-8"), digest_size=16).hexdigest()
 
 
 @dataclass
@@ -26,19 +49,6 @@ class Chunk:
     source: str
     domain: str
 
-    @property
-    def language(self) -> str:
-        return "ja" if self.source.endswith(TRANSLATION_SUFFIX) else "ru"
-
-    @property
-    def base_key(self) -> tuple[str, str]:
-        name = self.source
-        if name.endswith(TRANSLATION_SUFFIX):
-            name = name[: -len(TRANSLATION_SUFFIX)]
-        elif name.endswith(".md"):
-            name = name[:-3]
-        return self.domain, name
-
 
 class VectorStore:
     def __init__(
@@ -46,63 +56,101 @@ class VectorStore:
         embeddings: np.ndarray,
         chunks: list[Chunk],
         lexical: LexicalIndex | None = None,
+        version: float = 0.0,
     ):
         self.embeddings = embeddings
         self.chunks = chunks
         self.lexical = lexical
-        self.variants = {(c.base_key, c.language): c for c in chunks}
+        self.version = version
         self.lowered_texts = [flatten(c.text) for c in chunks]
+        self.domains = np.array([c.domain for c in chunks])
+        self._domain_masks: dict[frozenset[str], np.ndarray] = {}
 
-    def variant(self, chunk: Chunk, language: str) -> Chunk:
-        return self.variants.get((chunk.base_key, language), chunk)
-
-    def save(self) -> None:
-        config.INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        np.save(config.INDEX_EMBEDDINGS_PATH, self.embeddings)
-        payload = [
-            {"id": c.id, "text": c.text, "source": c.source, "domain": c.domain}
-            for c in self.chunks
-        ]
-        config.INDEX_CHUNKS_PATH.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        if self.lexical is not None:
-            config.INDEX_LEXICAL_PATH.write_text(
-                json.dumps(self.lexical.to_dict(), ensure_ascii=False), encoding="utf-8"
+    def save(self, meta: dict[str, str], path: Path = config.INDEX_DB_PATH) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".db.tmp")
+        tmp.unlink(missing_ok=True)
+        conn = sqlite3.connect(tmp)
+        try:
+            conn.executescript(SCHEMA)
+            conn.executemany("INSERT INTO meta VALUES (?, ?)", list(meta.items()))
+            conn.executemany(
+                "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    (c.id, c.domain, c.source, c.text, digest(c.text), self.embeddings[c.id].tobytes())
+                    for c in self.chunks
+                ),
             )
+            if self.lexical is not None:
+                conn.executemany(
+                    "INSERT INTO postings VALUES (?, ?, ?)",
+                    (
+                        (term, doc, tf)
+                        for doc, counts in enumerate(self.lexical.doc_tokens)
+                        for term, tf in counts.items()
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        os.replace(tmp, path)
+
+    @staticmethod
+    def read_vectors(path: Path = config.INDEX_DB_PATH) -> tuple[dict[str, str], dict[tuple[str, str, str], np.ndarray]]:
+        if not path.exists():
+            return {}, {}
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            meta = dict(conn.execute("SELECT key, value FROM meta"))
+            rows = conn.execute("SELECT domain, source, digest, vector FROM chunks")
+            vectors = {(d, s, h): np.frombuffer(v, dtype=np.float32) for d, s, h, v in rows}
+        finally:
+            conn.close()
+        return meta, vectors
 
     @classmethod
-    def load(cls) -> "VectorStore":
-        if not config.INDEX_EMBEDDINGS_PATH.exists() or not config.INDEX_CHUNKS_PATH.exists():
-            raise FileNotFoundError(
-                "Индекс не найден. Сначала запустите: python -m rag.ingest"
-            )
-        embeddings = np.load(config.INDEX_EMBEDDINGS_PATH)
-        raw = json.loads(config.INDEX_CHUNKS_PATH.read_text(encoding="utf-8"))
-        chunks = [
-            Chunk(id=r["id"], text=r["text"], source=r["source"], domain=r["domain"])
-            for r in raw
-        ]
-        lexical = None
-        if config.INDEX_LEXICAL_PATH.exists():
-            lexical = LexicalIndex.from_dict(
-                json.loads(config.INDEX_LEXICAL_PATH.read_text(encoding="utf-8"))
-            )
-        return cls(embeddings, chunks, lexical)
+    def load(cls, path: Path = config.INDEX_DB_PATH) -> "VectorStore":
+        if not path.exists():
+            raise FileNotFoundError("Индекс не найден. Сначала запустите: python -m rag.ingest")
+        version = path.stat().st_mtime
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            rows = conn.execute("SELECT id, domain, source, text, vector FROM chunks ORDER BY id").fetchall()
+            postings = conn.execute("SELECT doc, term, tf FROM postings").fetchall()
+        finally:
+            conn.close()
+        chunks = [Chunk(id=i, text=text, source=source, domain=domain) for i, domain, source, text, _ in rows]
+        embeddings = (
+            np.frombuffer(b"".join(r[4] for r in rows), dtype=np.float32).reshape(len(rows), -1)
+            if rows
+            else np.zeros((0, 0), dtype=np.float32)
+        )
+        lexical = LexicalIndex.from_postings(len(chunks), postings) if postings else None
+        return cls(embeddings, chunks, lexical, version)
+
+    def domain_mask(self, domains: set[str]) -> np.ndarray:
+        key = frozenset(domains)
+        mask = self._domain_masks.get(key)
+        if mask is None:
+            mask = np.isin(self.domains, list(key))
+            self._domain_masks[key] = mask
+        return mask
 
     def search(
         self,
         query_vector: np.ndarray,
         top_k: int | None = None,
         domains: set[str] | None = None,
+        scores: np.ndarray | None = None,
     ) -> list[tuple[Chunk, float]]:
-        candidate_idx = range(len(self.chunks))
-        if domains is not None:
-            candidate_idx = [i for i in candidate_idx if self.chunks[i].domain in domains]
-        if not candidate_idx:
+        if scores is None:
+            scores = self.embeddings @ query_vector
+        candidate_idx = (
+            np.flatnonzero(self.domain_mask(domains)) if domains is not None else np.arange(len(self.chunks))
+        )
+        if candidate_idx.size == 0:
             return []
-        candidate_idx = np.array(list(candidate_idx))
-        candidate_scores = self.embeddings[candidate_idx] @ query_vector
+        candidate_scores = scores[candidate_idx]
         order = np.argsort(-candidate_scores)
         if top_k is not None:
             order = order[:top_k]
