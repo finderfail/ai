@@ -11,12 +11,21 @@ from tokenizers import Tokenizer
 DTYPES = {"F32": np.float32, "F16": np.float16, "I64": np.int64}
 
 
-def resolve_model_dir(name: str, override: str | None = None) -> Path:
+MODEL_FILES = ("config.json", "tokenizer.json", "model.safetensors")
+
+
+def is_model_dir(path: Path) -> bool:
+    return all((path / name).exists() for name in MODEL_FILES)
+
+
+def resolve_model_dir(name: str, override: str | None = None, local: Path | None = None) -> Path:
     if override:
         path = Path(override).expanduser()
-        if (path / "config.json").exists():
+        if is_model_dir(path):
             return path
-        raise FileNotFoundError(f"Нет модели эмбеддингов в {path}")
+        raise FileNotFoundError(f"В {path} нет файлов модели эмбеддингов: {', '.join(MODEL_FILES)}")
+    if local is not None and is_model_dir(local):
+        return local
     hub = os.getenv("HF_HUB_CACHE") or os.path.join(
         os.getenv("HF_HOME", os.path.expanduser("~/.cache/huggingface")), "hub"
     )
@@ -24,13 +33,15 @@ def resolve_model_dir(name: str, override: str | None = None) -> Path:
     ref = repo / "refs" / "main"
     if ref.exists():
         snapshot = repo / "snapshots" / ref.read_text().strip()
-        if (snapshot / "config.json").exists():
+        if is_model_dir(snapshot):
             return snapshot
-    snapshots = sorted((repo / "snapshots").glob("*/config.json")) if repo.exists() else []
-    if snapshots:
-        return snapshots[-1].parent
+    snapshots = sorted(p.parent for p in repo.glob("snapshots/*/config.json")) if repo.exists() else []
+    for snapshot in reversed(snapshots):
+        if is_model_dir(snapshot):
+            return snapshot
     raise FileNotFoundError(
-        f"Модель {name} не найдена в {hub}. Укажите папку с моделью в EMBEDDING_MODEL_DIR"
+        f"Модель эмбеддингов {name} не найдена ни в {local}, ни в {hub}. "
+        "Скачайте её один раз: python -m rag.fetch_model"
     )
 
 

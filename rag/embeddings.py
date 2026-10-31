@@ -25,7 +25,9 @@ def _get_model() -> BertEncoder:
     if _model is None:
         with _model_lock:
             if _model is None:
-                model_dir = resolve_model_dir(config.EMBEDDING_MODEL_NAME, config.EMBEDDING_MODEL_DIR or None)
+                model_dir = resolve_model_dir(
+                    config.EMBEDDING_MODEL_NAME, config.EMBEDDING_MODEL_DIR or None, config.EMBEDDING_LOCAL_DIR
+                )
                 _model = BertEncoder(model_dir)
     return _model
 
